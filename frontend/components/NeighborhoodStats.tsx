@@ -119,7 +119,7 @@ function ScoreModal({ isOpen, onClose, title, score, icon, details }: ScoreModal
 
       {/* Modal */}
       <div
-        className="relative backdrop-blur-2xl bg-white/5 border border-white/20 rounded-2xl shadow-2xl max-w-md w-full p-6"
+        className="relative backdrop-blur-2xl bg-white/5 border border-white/20 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
@@ -159,14 +159,14 @@ function ScoreModal({ isOpen, onClose, title, score, icon, details }: ScoreModal
 
         {/* Details */}
         <div className="space-y-3">
-          <h4 className="text-white font-semibold text-sm uppercase tracking-wide">Factors</h4>
+          <h4 className="text-white font-semibold text-sm uppercase tracking-wide">Details</h4>
           {details.map((detail, idx) => (
             <div
               key={idx}
-              className="flex justify-between items-center backdrop-blur-md bg-white/10 border border-white/20 rounded-lg p-3"
+              className="backdrop-blur-md bg-white/10 border border-white/20 rounded-lg p-3"
             >
-              <span className="text-gray-200 text-sm">{detail.factor}</span>
-              <span className="text-white font-semibold text-sm">{detail.impact}</span>
+              <div className="text-gray-200 text-sm font-semibold mb-1">{detail.factor}</div>
+              <div className="text-white text-sm">{detail.impact}</div>
             </div>
           ))}
         </div>
@@ -183,9 +183,10 @@ interface NeighborhoodStatsProps {
   onNextListing?: () => void;
   currentListingIndex?: number;
   totalListings?: number;
+  communityAnalysis?: any;
 }
 
-export default function NeighborhoodStats({ location = 'San Francisco, CA', propertyCount = 0, onNextListing, currentListingIndex = 0, totalListings = 0 }: NeighborhoodStatsProps) {
+export default function NeighborhoodStats({ location = 'San Francisco, CA', propertyCount = 0, onNextListing, currentListingIndex = 0, totalListings = 0, communityAnalysis }: NeighborhoodStatsProps) {
   const [modalContent, setModalContent] = useState<{
     title: string;
     score: number;
@@ -193,36 +194,39 @@ export default function NeighborhoodStats({ location = 'San Francisco, CA', prop
     details: ScoreDetail[];
   } | null>(null);
 
-  // Mock data - in real app, this would come from Fetch.ai agents
-  const stats = {
-    overallScore: 87,
-    schoolRating: 92,
-    safetyScore: 78,
-    avgPricePerSqft: '$950',
-    avgSqft: '1,850',
-    transitScore: 88,
+  // Use real community analysis data or fall back to mock data
+  const stats = communityAnalysis ? {
+    overallScore: Math.round(communityAnalysis.overall_score * 10), // Convert 0-10 to 0-100
+    schoolRating: Math.round(communityAnalysis.school_rating * 10),
+    safetyScore: Math.round(communityAnalysis.safety_score * 10),
+    avgPricePerSqft: `$${communityAnalysis.housing_price_per_square_foot}`,
+    avgSqft: communityAnalysis.average_house_size_square_foot.toLocaleString(),
+  } : {
+    overallScore: 0,
+    schoolRating: 0,
+    safetyScore: 0,
+    avgPricePerSqft: 'N/A',
+    avgSqft: 'N/A',
   };
 
+  // Build score details from community analysis
   const scoreDetails = {
-    overall: [
-      { factor: 'Location Quality', impact: '+25' },
-      { factor: 'School District', impact: '+20' },
-      { factor: 'Safety', impact: '+18' },
-      { factor: 'Walkability', impact: '+15' },
-      { factor: 'Transit Access', impact: '+9' }
-    ],
-    school: [
-      { factor: 'Test Scores', impact: 'Excellent' },
-      { factor: 'Student-Teacher Ratio', impact: '15:1' },
-      { factor: 'Graduation Rate', impact: '98%' },
-      { factor: 'College Readiness', impact: 'High' }
-    ],
-    safety: [
-      { factor: 'Crime Rate', impact: 'Low' },
-      { factor: 'Police Response', impact: '< 5 min' },
-      { factor: 'Street Lighting', impact: 'Good' },
-      { factor: 'Emergency Services', impact: 'Excellent' }
-    ]
+    overall: communityAnalysis ? [
+      { factor: 'Explanation', impact: communityAnalysis.overall_explanation }
+    ] : [],
+    school: communityAnalysis ? [
+      { factor: 'School Rating', impact: communityAnalysis.school_explanation }
+    ] : [],
+    safety: communityAnalysis ? [
+      ...communityAnalysis.positive_stories.map((story: any) => ({
+        factor: `✅ ${story.title}`,
+        impact: story.summary
+      })),
+      ...communityAnalysis.negative_stories.map((story: any) => ({
+        factor: `⚠️ ${story.title}`,
+        impact: story.summary
+      }))
+    ] : []
   };
 
   const openModal = (title: string, score: number, icon: string, details: ScoreDetail[]) => {

@@ -133,9 +133,12 @@ Respond with a JSON object as specified in your instructions."""
 
                 # Build response
                 requirements = None
+                community_name = None
                 if parsed.get("is_complete", False) and "requirements" in parsed:
                     requirements = UserRequirements(**parsed["requirements"])
-                    ctx.logger.info(f"Requirements gathered for session {msg.session_id}")
+                    # Extract community name from location
+                    community_name = requirements.location if requirements else None
+                    ctx.logger.info(f"Requirements gathered for session {msg.session_id}, community: {community_name}")
 
                 response = ScopingResponse(
                     agent_message=parsed.get("agent_message", "How can I help you find a home?"),
@@ -143,7 +146,8 @@ Respond with a JSON object as specified in your instructions."""
                     session_id=msg.session_id,
                     requirements=requirements,
                     is_general_question=parsed.get("is_general_question", False),
-                    general_question=parsed.get("general_question", None)
+                    general_question=parsed.get("general_question", None),
+                    community_name=community_name
                 )
             else:
                 ctx.logger.warning("Failed to parse LLM response")
