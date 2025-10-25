@@ -1,0 +1,101 @@
+# =========================
+#  🐍 PYTHON BACKEND
+# =========================
+# Virtual environment
+CLAUDE.md
+.claude
+backend/.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pkl
+*.log
+
+# Byte-compiled / optimized / DLL files
+*.so
+*.dll
+*.dylib
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# VS Code settings
+.vscode/
+.idea/
+
+# macOS and Linux artifacts
+.DS_Store
+Thumbs.db
+
+# =========================
+#  ⚡ NEXT.JS FRONTEND
+# =========================
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
+frontend/out/
+frontend/.turbo/
+
+# Local environment
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+frontend/.env.test
+
+# Log files
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.pnpm-store
+
+# Build artifacts
+frontend/dist/
+frontend/build/
+
+# =========================
+#  📦 GENERAL
+# =========================
+# Logs
+*.log
+logs/
+*.pid
+*.seed
+
+# Editor junk
+*.swp
+*.swo
+*.tmp
+*.bak
+*.old
+
+# Coverage and testing
+.coverage
+.pytest_cache/
+htmlcov/
+coverage/
+junit.xml
+
+# OS and misc
+*.DS_Store
+.DS_Store?
+ehthumbs.db
+Icon?
+._*
+
+# =========================
+#  🧠 PROJECT SPECIFIC
+# =========================
+STREAMING_SETUP.md
+*.sqlite3
+*.db
+
+# Ignore local settings but keep templates
+!*.example
