@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import MapView from '@/components/MapView';
-import { Property, mockProperties } from '@/lib/mockData';
+import { Property } from '@/lib/mockData';
 
 export default function Home() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [properties, setProperties] = useState<Property[]>(mockProperties);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [topResultCoords, setTopResultCoords] = useState<{ latitude: number; longitude: number; address: string; image_url?: string } | null>(null);
   const [rawSearchResults, setRawSearchResults] = useState<any[]>([]);
   const [topResultDetails, setTopResultDetails] = useState<any>(null);
@@ -37,8 +37,8 @@ export default function Home() {
       propertyType: 'Single Family'
     }));
 
-    // Merge with mock properties or replace
-    setProperties(convertedProperties.length > 0 ? convertedProperties : mockProperties);
+    // Set converted properties (no mock data fallback)
+    setProperties(convertedProperties);
   };
 
   const handleRawSearchResults = (results: any[]) => {

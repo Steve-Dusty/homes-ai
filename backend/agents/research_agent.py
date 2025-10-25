@@ -106,7 +106,8 @@ async def generate_llm_summary(search_results: list, requirements, original_quer
                     "You are a friendly real estate assistant. Based on search results, "
                     "provide a natural, conversational summary of available properties. "
                     "Mention 2-3 specific listings with addresses and key details. "
-                    "Keep it warm and helpful, 3-4 sentences max."
+                    "Keep it warm and helpful, 3-4 sentences max. "
+                    "DO NOT mention the total number of listings in your response."
                 ),
             },
             {
@@ -114,7 +115,7 @@ async def generate_llm_summary(search_results: list, requirements, original_quer
                 "content": (
                     f"User is looking for: {req_text}\n\n"
                     f"Search results:\n{results_text}\n"
-                    "Summarize what properties are available."
+                    "Summarize what properties are available. Don't mention how many listings there are."
                 ),
             },
         ],
@@ -124,17 +125,17 @@ async def generate_llm_summary(search_results: list, requirements, original_quer
         async with aiohttp.ClientSession() as session:
             async with session.post(ASI_URL, headers=headers, json=body) as resp:
                 if resp.status != 200:
-                    return f"Found {len(search_results)} property listings in {requirements.location}. Check the search results for details!"
+                    return f"Here are some property listings in {requirements.location}. Check the results for details!"
 
                 res = await resp.json()
                 if "choices" in res and res["choices"]:
                     return res["choices"][0]["message"]["content"]
                 else:
-                    return f"Found {len(search_results)} property listings in {requirements.location}. Check the search results for details!"
+                    return f"Here are some property listings in {requirements.location}. Check the results for details!"
     except Exception as e:
         ctx_logger = None  # We don't have ctx here, so just print
         print(f"[LLM Summary Error] {e}")
-        return f"Found {len(search_results)} property listings in {requirements.location}. Check the search results for details!"
+        return f"Here are some property listings in {requirements.location}. Check the results for details!"
 
 
 async def decide_tool(prompt: str) -> dict:
@@ -250,6 +251,21 @@ def create_research_agent(port: int = 8002):
                 # Search engine results format
                 if "organic" in data:
                     organic_results = data.get("organic", [])
+
+                    # Check if Bright Data returned empty results
+                    if not organic_results or len(organic_results) == 0:
+                        ctx.logger.warning("Bright Data returned no organic results")
+                        await ctx.send(sender, ResearchResponse(
+                            properties=[],
+                            search_summary=f"We couldn't find any properties matching your criteria in {req.location}. Try adjusting your budget, number of bedrooms, or search in a nearby area.",
+                            total_found=0,
+                            session_id=msg.session_id,
+                            raw_search_results=[],
+                            top_result_image_url=None,
+                            result_images=[]
+                        ))
+                        return
+
                     ctx.logger.info(f"Found {len(organic_results)} organic search results")
 
                     # Try to scrape the first 5 results for images
@@ -310,6 +326,20 @@ def create_research_agent(port: int = 8002):
             organic_results = filter_results_by_location(organic_results, req.location)
             ctx.logger.info(f"After filtering: {len(organic_results)} results remain")
 
+            # Check if filtering removed all results
+            if not organic_results or len(organic_results) == 0:
+                ctx.logger.warning(f"All results filtered out - no properties in {req.location}")
+                await ctx.send(sender, ResearchResponse(
+                    properties=[],
+                    search_summary=f"We couldn't find any properties matching your criteria in {req.location}. The search returned results from other areas, but none specifically in {req.location}. Try expanding your search to nearby cities or adjusting your criteria.",
+                    total_found=0,
+                    session_id=msg.session_id,
+                    raw_search_results=[],
+                    top_result_image_url=None,
+                    result_images=[]
+                ))
+                return
+
         # Build summary - use LLM if we have organic results
         total_results = len(organic_results) if organic_results else len(properties)
 
@@ -317,12 +347,8 @@ def create_research_agent(port: int = 8002):
             ctx.logger.info("Generating LLM summary from search results")
             summary = await generate_llm_summary(organic_results, req, prompt)
 
-            # Ensure summary mentions count
-            if not any(word in summary.lower() for word in ['found', 'results', 'listings', 'properties']):
-                summary = f"Found {len(organic_results)} property listings. {summary}"
-
         elif properties:
-            summary = f"Found {len(properties)} properties in {req.location}"
+            summary = f"Here are properties in {req.location}"
             if req.bedrooms:
                 summary += f" with {req.bedrooms} bedrooms"
             if req.bathrooms:

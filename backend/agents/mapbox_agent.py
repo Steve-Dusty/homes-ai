@@ -73,14 +73,9 @@ def create_mapbox_agent(port: int = 8004):
         result = await geocode_address(msg.address)
 
         if "error" in result:
-            ctx.logger.warning(f"Geocoding error: {result['error']}")
-            await ctx.send(sender, MapboxResponse(
-                address=msg.address,
-                latitude=0.0,
-                longitude=0.0,
-                session_id=msg.session_id,
-                error=result["error"]
-            ))
+            ctx.logger.warning(f"Geocoding failed for '{msg.address}': {result['error']} - Not sending response")
+            # Don't send a response with mock coordinates - just skip it
+            return
         else:
             ctx.logger.info(f"Geocoded to: {result['latitude']}, {result['longitude']}")
             await ctx.send(sender, MapboxResponse(
