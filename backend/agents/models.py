@@ -51,6 +51,7 @@ class ScopingResponse(Model):
     requirements: Optional[UserRequirements] = None
     is_general_question: bool = False
     general_question: Optional[str] = None
+    community_name: Optional[str] = None  # Location/community for analysis
 
 
 # Research Agent Models
@@ -125,6 +126,28 @@ class LocalDiscoveryResponse(Model):
     pois: List[POI]
     session_id: str
     listing_index: int
+
+
+# Community Analysis Agent Models
+class CommunityAnalysisRequest(Model):
+    """Request to analyze community news and metrics"""
+    location_name: str
+    session_id: str
+
+
+class CommunityAnalysisResponse(Model):
+    """Response with community analysis metrics"""
+    location: str
+    overall_score: float
+    overall_explanation: str
+    safety_score: float
+    positive_stories: List[dict]  # [{"title": str, "summary": str, "url": str}, ...]
+    negative_stories: List[dict]  # [{"title": str, "summary": str, "url": str}, ...]
+    school_rating: float
+    school_explanation: str
+    housing_price_per_square_foot: int
+    average_house_size_square_foot: int
+    session_id: str
 
 
 # Final Result Model

@@ -13,6 +13,7 @@ export default function Home() {
   const [topResultDetails, setTopResultDetails] = useState<any>(null);
   const [sessionId] = useState(() => `session_${Date.now()}`);
   const [currentListingIndex, setCurrentListingIndex] = useState(0);
+  const [communityAnalysis, setCommunityAnalysis] = useState<any>(null);
 
   const handlePropertiesFound = (newProperties: any[]) => {
     // Convert backend properties to frontend Property format
@@ -93,6 +94,11 @@ export default function Home() {
     setTopResultCoords(coords);
   };
 
+  const handleCommunityAnalysis = (analysis: any) => {
+    console.log('[Home] Received community analysis:', analysis);
+    setCommunityAnalysis(analysis);
+  };
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-black flex">
       <div className="w-1/4 h-full border-r border-slate-700/50">
@@ -100,6 +106,7 @@ export default function Home() {
           onPropertiesFound={handlePropertiesFound}
           onTopResultCoordinates={handleTopResultCoordinates}
           onRawSearchResults={handleRawSearchResults}
+          onCommunityAnalysis={handleCommunityAnalysis}
           sessionId={sessionId}
         />
       </div>
@@ -112,6 +119,7 @@ export default function Home() {
           rawSearchResults={rawSearchResults}
           onNextListing={handleNextListing}
           currentListingIndex={currentListingIndex}
+          communityAnalysis={communityAnalysis}
         />
       </div>
     </div>

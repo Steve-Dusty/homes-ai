@@ -13,10 +13,11 @@ interface ChatInterfaceProps {
   onPropertiesFound?: (properties: any[]) => void;
   onTopResultCoordinates?: (coords: { latitude: number; longitude: number; address: string; image_url?: string } | null) => void;
   onRawSearchResults?: (results: any[]) => void;
+  onCommunityAnalysis?: (analysis: any) => void;
   sessionId?: string;
 }
 
-export default function ChatInterface({ onPropertiesFound, onTopResultCoordinates, onRawSearchResults, sessionId }: ChatInterfaceProps) {
+export default function ChatInterface({ onPropertiesFound, onTopResultCoordinates, onRawSearchResults, onCommunityAnalysis, sessionId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { id: Date.now(), role: 'agent', content: 'Hi! I can help you find a home in the Bay Area. Where would you like to live?' }
   ]);
@@ -70,7 +71,7 @@ export default function ChatInterface({ onPropertiesFound, onTopResultCoordinate
       });
 
       if (data.status === 'success' && data.data) {
-        const { properties, search_summary, top_result_coordinates, raw_search_results } = data.data;
+        const { properties, search_summary, top_result_coordinates, raw_search_results, community_analysis } = data.data;
 
         // Add agent's response
         const agentMsg: Message = {
@@ -92,6 +93,12 @@ export default function ChatInterface({ onPropertiesFound, onTopResultCoordinate
         if (top_result_coordinates && onTopResultCoordinates) {
           console.log('[ChatInterface] Top result coordinates:', top_result_coordinates);
           onTopResultCoordinates(top_result_coordinates);
+        }
+
+        // If community analysis found, pass to parent
+        if (community_analysis && onCommunityAnalysis) {
+          console.log('[ChatInterface] Community analysis:', community_analysis);
+          onCommunityAnalysis(community_analysis);
         }
 
         // If properties found, pass to map

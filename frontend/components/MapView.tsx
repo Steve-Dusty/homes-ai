@@ -14,6 +14,7 @@ interface MapViewProps {
   rawSearchResults?: any[];
   onNextListing?: () => void;
   currentListingIndex?: number;
+  communityAnalysis?: any;
 }
 
 // Helper function to get icon and color for POI categories
@@ -31,7 +32,7 @@ const getPOIStyle = (category: string) => {
   return styles[category] || { emoji: '📍', color: '#6B7280', bgColor: 'bg-gray-500' };
 };
 
-export default function MapView({ selectedProperty, allProperties, topResultCoords, topResultDetails, rawSearchResults, onNextListing, currentListingIndex }: MapViewProps) {
+export default function MapView({ selectedProperty, allProperties, topResultCoords, topResultDetails, rawSearchResults, onNextListing, currentListingIndex, communityAnalysis }: MapViewProps) {
   const mapRef = useRef<any>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [selectedPOI, setSelectedPOI] = useState<any>(null);
@@ -84,11 +85,12 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
       {/* Stats Container */}
       <div className="absolute top-0 left-0 right-0 z-10">
         <NeighborhoodStats
-          location="San Francisco Bay Area"
+          location={communityAnalysis?.location || "San Francisco Bay Area"}
           propertyCount={allProperties.length}
           onNextListing={onNextListing}
           currentListingIndex={currentListingIndex}
           totalListings={rawSearchResults?.length || 0}
+          communityAnalysis={communityAnalysis}
         />
       </div>
 

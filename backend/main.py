@@ -15,12 +15,15 @@ from agents.models import (
     MapboxResponse,
     LocalDiscoveryRequest,
     LocalDiscoveryResponse,
+    CommunityAnalysisRequest,
+    CommunityAnalysisResponse,
 )
 from agents.scoping_agent import create_scoping_agent
 from agents.research_agent import create_research_agent
 from agents.general_agent import create_general_agent
 from agents.mapbox_agent import create_mapbox_agent
 from agents.local_discovery_agent import create_local_discovery_agent
+from agents.community_analysis_agent import create_community_analysis_agent
 
 
 # REST API Models
@@ -45,6 +48,7 @@ def main():
     general_agent = create_general_agent(port=8003)
     mapbox_agent = create_mapbox_agent(port=8004)
     local_discovery_agent = create_local_discovery_agent(port=8005)
+    community_analysis_agent = create_community_analysis_agent(port=8006)
 
     # Create coordinator agent
     coordinator = Agent(
@@ -60,6 +64,7 @@ def main():
     general_address = general_agent.address
     mapbox_address = mapbox_agent.address
     local_discovery_address = local_discovery_agent.address
+    community_analysis_address = community_analysis_agent.address
 
     # Session storage
     sessions = {}
@@ -71,6 +76,7 @@ def main():
         ctx.logger.info(f"Scoping Agent: {scoping_address}")
         ctx.logger.info(f"Research Agent: {research_address}")
         ctx.logger.info(f"Local Discovery Agent: {local_discovery_address}")
+        ctx.logger.info(f"Community Analysis Agent: {community_analysis_address}")
         ctx.logger.info("=" * 60)
 
     @coordinator.on_message(model=ScopingResponse)
@@ -106,6 +112,17 @@ def main():
                     session_id=msg.session_id
                 )
             )
+
+            # Also send to community analysis agent if we have a community name
+            if msg.community_name:
+                ctx.logger.info(f"Forwarding to community analysis agent for: {msg.community_name}")
+                await ctx.send(
+                    community_analysis_address,
+                    CommunityAnalysisRequest(
+                        location_name=msg.community_name,
+                        session_id=msg.session_id
+                    )
+                )
 
     @coordinator.on_message(model=ResearchResponse)
     async def handle_research(ctx: Context, sender: str, msg: ResearchResponse):
@@ -222,6 +239,15 @@ def main():
 
         sessions[msg.session_id]["general"] = msg
 
+    @coordinator.on_message(model=CommunityAnalysisResponse)
+    async def handle_community_analysis(ctx: Context, sender: str, msg: CommunityAnalysisResponse):
+        ctx.logger.info(f"Received community analysis response for session {msg.session_id}")
+
+        if msg.session_id not in sessions:
+            sessions[msg.session_id] = {}
+
+        sessions[msg.session_id]["community_analysis"] = msg
+
     @coordinator.on_rest_post("/api/chat", ChatRequest, ChatResponse)
     async def handle_chat(ctx: Context, req: ChatRequest) -> ChatResponse:
         ctx.logger.info(f"REST request from session {req.session_id}: {req.message}")
@@ -288,6 +314,14 @@ def main():
                     if "research" in sessions[req.session_id]:
                         break
                     await asyncio.sleep(0.5)
+
+                # Also wait for community analysis if we have a community name
+                if scoping_msg.community_name:
+                    ctx.logger.info("Waiting for community analysis results")
+                    for _ in range(60):
+                        if "community_analysis" in sessions[req.session_id]:
+                            break
+                        await asyncio.sleep(0.5)
 
                 if "research" in sessions[req.session_id]:
                     research_msg = sessions[req.session_id]["research"]
@@ -369,6 +403,23 @@ def main():
                             "image_url": enhanced_results[0].get("image_url")
                         }
 
+                    # Build community analysis data if available
+                    community_data = None
+                    if "community_analysis" in sessions[req.session_id]:
+                        community_msg = sessions[req.session_id]["community_analysis"]
+                        community_data = {
+                            "location": community_msg.location,
+                            "overall_score": community_msg.overall_score,
+                            "overall_explanation": community_msg.overall_explanation,
+                            "safety_score": community_msg.safety_score,
+                            "positive_stories": community_msg.positive_stories,
+                            "negative_stories": community_msg.negative_stories,
+                            "school_rating": community_msg.school_rating,
+                            "school_explanation": community_msg.school_explanation,
+                            "housing_price_per_square_foot": community_msg.housing_price_per_square_foot,
+                            "average_house_size_square_foot": community_msg.average_house_size_square_foot
+                        }
+
                     return ChatResponse(
                         status="success",
                         data={
@@ -377,7 +428,8 @@ def main():
                             "search_summary": research_msg.search_summary,
                             "total_found": research_msg.total_found,
                             "top_result_coordinates": top_result_coords,
-                            "raw_search_results": enhanced_results
+                            "raw_search_results": enhanced_results,
+                            "community_analysis": community_data
                         }
                     )
 
@@ -415,6 +467,7 @@ def main():
     bureau.add(general_agent)
     bureau.add(mapbox_agent)
     bureau.add(local_discovery_agent)
+    bureau.add(community_analysis_agent)
     bureau.add(coordinator)
 
     print("✅ All agents configured")
@@ -424,6 +477,7 @@ def main():
     print(f"   - General: {general_address}")
     print(f"   - Mapbox: {mapbox_address}")
     print(f"   - Local Discovery: {local_discovery_address}")
+    print(f"   - Community Analysis: {community_analysis_address}")
     print("=" * 60)
 
     bureau.run()
