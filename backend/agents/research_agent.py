@@ -30,6 +30,44 @@ def extract_first_image_from_markdown(markdown: str) -> str | None:
     return None
 
 
+def filter_results_by_location(search_results: list, required_location: str) -> list:
+    """Filter out results that are not real estate listings in the requested location."""
+    filtered = []
+    location_lower = required_location.lower()
+
+    # Real estate domains we want to keep
+    valid_domains = ['redfin.com', 'zillow.com', 'realtor.com', 'trulia.com', 'homes.com']
+
+    for result in search_results:
+        title = result.get("title", "")
+        description = result.get("description", "")
+        link = result.get("link", "")
+
+        title_lower = title.lower()
+        description_lower = description.lower()
+        link_lower = link.lower()
+
+        # First check: Must be from a real estate website
+        is_real_estate_site = any(domain in link_lower for domain in valid_domains)
+
+        if not is_real_estate_site:
+            print(f"[Location Filter] ❌ Not a real estate site: {title[:80]}")
+            continue
+
+        # Second check: Must contain the location
+        has_location = location_lower in title_lower or location_lower in description_lower or location_lower in link_lower
+
+        if not has_location:
+            print(f"[Location Filter] ❌ Wrong location: {title[:80]}")
+            continue
+
+        # Passed both checks
+        filtered.append(result)
+
+    print(f"[Location Filter] ✅ Filtered from {len(search_results)} to {len(filtered)} results")
+    return filtered
+
+
 async def generate_llm_summary(search_results: list, requirements, original_query: str) -> str:
     """Use ASI-1 to generate a conversational summary from search results."""
     headers = {
@@ -265,6 +303,12 @@ def create_research_agent(port: int = 8002):
 
         except json.JSONDecodeError:
             ctx.logger.warning("Could not parse response as JSON")
+
+        # Filter organic results by location BEFORE processing
+        if organic_results and len(organic_results) > 0:
+            ctx.logger.info(f"Filtering {len(organic_results)} results by location: {req.location}")
+            organic_results = filter_results_by_location(organic_results, req.location)
+            ctx.logger.info(f"After filtering: {len(organic_results)} results remain")
 
         # Build summary - use LLM if we have organic results
         total_results = len(organic_results) if organic_results else len(properties)

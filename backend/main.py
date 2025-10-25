@@ -369,7 +369,7 @@ def main():
 
                     ctx.logger.info(f"🔍 Merging data - Geocoded: {len(geocoded_results)}, Images: {len(result_images)}, POI results: {len(poi_results)}")
 
-                    for idx, result in enumerate(research_msg.raw_search_results[:5]):
+                    for idx, result in enumerate(research_msg.raw_search_results):
                         enhanced_result = dict(result)  # Copy the original result
 
                         # Find matching geocoded data
