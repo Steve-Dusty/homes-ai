@@ -77,6 +77,7 @@ class GeneralRequest(Model):
     """Request to general agent for information"""
     question: str
     session_id: str
+    context: Optional[str] = None  # Recent search context (e.g., last searched location)
 
 
 class GeneralResponse(Model):

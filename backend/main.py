@@ -93,16 +93,25 @@ def main():
 
         # Route based on intent
         if msg.is_general_question and msg.general_question:
-            # Forward to general agent
+            # Forward to general agent with context
             ctx.logger.info(f"Forwarding to general agent with question: {msg.general_question}")
+
+            # Get last search location from session for context
+            last_location = sessions[msg.session_id].get("last_search_location")
+            context = f"The user's last property search was in: {last_location}" if last_location else None
+
             await ctx.send(
                 general_address,
                 GeneralRequest(
                     question=msg.general_question,
-                    session_id=msg.session_id
+                    session_id=msg.session_id,
+                    context=context
                 )
             )
         elif msg.is_complete and msg.requirements:
+            # Save last search location for context
+            sessions[msg.session_id]["last_search_location"] = msg.requirements.location
+
             # Forward to research agent for property search
             ctx.logger.info(f"Forwarding to research agent")
             await ctx.send(

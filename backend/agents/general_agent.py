@@ -48,8 +48,13 @@ Respond with a JSON object in this format:
     async def handle_request(ctx: Context, sender: str, msg: GeneralRequest):
         ctx.logger.info(f"General agent received question from {sender}: {msg.question}")
 
-        # Perform Tavily search for general information
-        search_query = f"{msg.question}"
+        # Build search query - always append context if available
+        search_query = msg.question
+        if msg.context:
+            ctx.logger.info(f"Using context: {msg.context}")
+            # Extract location from context and append to search
+            location = msg.context.split(": ")[-1] if ": " in msg.context else ""
+            search_query = f"{msg.question} {location}"
 
         ctx.logger.info(f"Search query: {search_query}")
 
@@ -69,16 +74,21 @@ Respond with a JSON object in this format:
             return
     
         # Build context for LLM from search results
-        context = f"User Question: {msg.question}\n\n"
-        context += "Search Results:\n\n"
+        llm_context = f"User Question: {msg.question}\n\n"
+
+        # Add conversation context if available
+        if msg.context:
+            llm_context += f"Context: {msg.context}\n\n"
+
+        llm_context += "Search Results:\n\n"
 
         for idx, result in enumerate(search_results["results"][:5], 1):
-            context += f"Result {idx}:\n"
-            context += f"Title: {result.get('title', 'N/A')}\n"
-            context += f"URL: {result.get('url', 'N/A')}\n"
-            context += f"Content: {result.get('content', 'N/A')[:800]}...\n\n"
+            llm_context += f"Result {idx}:\n"
+            llm_context += f"Title: {result.get('title', 'N/A')}\n"
+            llm_context += f"URL: {result.get('url', 'N/A')}\n"
+            llm_context += f"Content: {result.get('content', 'N/A')[:800]}...\n\n"
 
-        prompt = f"""{context}
+        prompt = f"""{llm_context}
 
 Based on the search results above, answer the user's question: "{msg.question}"
 
