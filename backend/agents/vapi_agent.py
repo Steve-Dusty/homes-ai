@@ -34,6 +34,7 @@ class VapiResponse(Model):
     status: str
     message: str
     session_id: str
+    call_summary: Optional[str] = None
 
 
 def build_system_prompt(vapi_context: Dict[str, Any]) -> str:
@@ -219,12 +220,23 @@ def create_vapi_agent(port: int = 8008):
 
             ctx.logger.info(f"✅ Call initiated! Call ID: {call_id}")
 
-            # Send success response
+            # Wait for call to complete and get analysis summary
+            ctx.logger.info("⏳ Waiting for call to complete and analysis to be generated...")
+            call_summary = vapi_client.wait_for_call_analysis(call_id, timeout_seconds=120)
+
+            if call_summary:
+                ctx.logger.info(f"✅ Got call summary: {call_summary[:100]}...")
+            else:
+                ctx.logger.warning("⚠️ Call analysis not available (timeout or error)")
+                call_summary = "Call completed. Analysis not yet available."
+
+            # Send success response with summary
             await ctx.send(sender, VapiResponse(
                 call_id=call_id,
                 status="success",
-                message=f"Negotiation call initiated to {target_phone_number}",
-                session_id=msg.session_id
+                message=f"Negotiation call completed",
+                session_id=msg.session_id,
+                call_summary=call_summary
             ))
 
         except Exception as e:

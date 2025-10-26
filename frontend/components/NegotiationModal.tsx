@@ -34,6 +34,10 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
         additional_info: formData.additionalInfo,
       });
 
+      // Immediately show call in progress screen
+      setIsSubmitting(false);
+      setIsCallInProgress(true);
+
       const response = await fetch('http://localhost:8080/api/negotiate', {
         method: 'POST',
         headers: {
@@ -53,28 +57,29 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error response:', errorText);
-        throw new Error(`Failed to start negotiation: ${response.status}`);
+        // Reset to form and show error
+        setIsCallInProgress(false);
+        setError(`Failed to start negotiation: ${response.status}`);
+        return;
       }
 
       const result = await response.json();
-      console.log('Negotiation started successfully:', result);
+      console.log('Negotiation completed:', result);
 
       // Check if response has success flag
       if (result.success) {
-        // Show loading screen for call
-        setIsSubmitting(false);
-        setIsCallInProgress(true);
-
-        // Store the result directly (not wrapped in .data)
+        // Store the result and transition to summary
         setCallSummary(result);
+        setIsCallInProgress(false);
       } else {
-        throw new Error(result.message || 'Unknown error');
+        // Show error and go back to form
+        setIsCallInProgress(false);
+        setError(result.message || 'Unknown error');
       }
     } catch (err) {
       console.error('Negotiation error:', err);
+      setIsCallInProgress(false);
       setError('Failed to start negotiation. Please try again.');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -147,17 +152,6 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
               <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
               <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
             </div>
-
-            {/* Simulate call completion button (for testing) */}
-            <button
-              onClick={() => {
-                setIsCallInProgress(false);
-                // Call summary is already set
-              }}
-              className="mt-4 px-6 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm transition-all"
-            >
-              Complete Call
-            </button>
           </div>
         </div>
       </div>,
@@ -204,35 +198,12 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
 
           {/* Summary Content */}
           <div className="p-6 space-y-6">
-            {/* Leverage Score */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-white/80 font-medium">Leverage Score</span>
-                <span className="text-3xl font-bold text-purple-400">{callSummary.leverage_score}/10</span>
-              </div>
-            </div>
-
-            {/* Message */}
-            {callSummary.message && (
+            {/* Call Summary */}
+            {callSummary.call_summary && (
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-white/90">Summary</h3>
-                <p className="text-white/70 leading-relaxed">{callSummary.message}</p>
-              </div>
-            )}
-
-            {/* Next Actions */}
-            {callSummary.next_actions && callSummary.next_actions.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-white/90">Next Actions</h3>
-                <div className="space-y-2">
-                  {callSummary.next_actions.map((action: string, index: number) => (
-                    <div key={index} className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-blue-400 text-xs font-bold">{index + 1}</span>
-                      </div>
-                      <p className="text-white/80 text-sm">{action}</p>
-                    </div>
-                  ))}
+                <h3 className="text-lg font-semibold text-white/90">Call Summary</h3>
+                <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-lg p-4">
+                  <p className="text-white/80 leading-relaxed whitespace-pre-wrap">{callSummary.call_summary}</p>
                 </div>
               </div>
             )}

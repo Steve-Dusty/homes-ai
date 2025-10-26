@@ -127,3 +127,53 @@ class VapiClient:
             if hasattr(e, 'response') and e.response is not None:
                 print(f"Response: {e.response.text}")
             return None
+
+    def wait_for_call_analysis(self, call_id: str, timeout_seconds: int = 120, poll_interval: float = 2.0) -> Optional[str]:
+        """
+        Wait for a call to complete and return its analysis summary.
+        Vapi automatically generates analysis after call ends.
+
+        Args:
+            call_id: The ID of the call
+            timeout_seconds: Maximum time to wait for analysis (default 120s)
+            poll_interval: How often to poll for status (default 2s)
+
+        Returns:
+            The call summary from analysis, or None if timeout/error
+        """
+        import time
+
+        start_time = time.time()
+
+        print(f"Waiting for call {call_id} to complete and generate analysis...")
+
+        while (time.time() - start_time) < timeout_seconds:
+            call_data = self.get_call_status(call_id)
+
+            if not call_data:
+                print(f"Failed to get call status")
+                time.sleep(poll_interval)
+                continue
+
+            status = call_data.get("status", "")
+            print(f"Call status: {status}")
+
+            # Check if call has ended
+            if status == "ended":
+                # Call has ended, check if analysis is available
+                analysis = call_data.get("analysis", {})
+                summary = analysis.get("summary", "")
+
+                if summary:
+                    print(f"✅ Analysis ready! Summary: {summary[:100]}...")
+                    return summary
+                else:
+                    print("Call ended but analysis not yet ready, waiting...")
+                    time.sleep(poll_interval)
+                    continue
+
+            # Call still in progress
+            time.sleep(poll_interval)
+
+        print(f"⏱️ Timeout waiting for call analysis after {timeout_seconds}s")
+        return None

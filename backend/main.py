@@ -28,7 +28,6 @@ from agents.local_discovery_agent import create_local_discovery_agent
 from agents.community_analysis_agent import create_community_analysis_agent
 from agents.prober_agent import create_prober_agent
 from agents.vapi_agent import create_vapi_agent, VapiRequest, VapiResponse
-from agents.asi_email_agent import create_asi_email_agent, EmailRequest, EmailResponse
 from agents.llm_client import SimpleLLMAgent
 
 
@@ -55,18 +54,7 @@ class NegotiateResponse(Model):
     message: str
     leverage_score: float
     next_actions: list
-
-
-class SendEmailRequest(Model):
-    agent_address: str
-    recipient_email: str
-    subject: str
-    content: str
-
-
-class SendEmailResponse(Model):
-    status: str
-    message: str
+    call_summary: str = ""
 
 
 def main():
@@ -83,7 +71,6 @@ def main():
     community_analysis_agent = create_community_analysis_agent(port=8006)
     prober_agent = create_prober_agent(port=8007)
     vapi_agent = create_vapi_agent(port=8008)
-    asi_email_agent = create_asi_email_agent(port=8009)
 
     # Create coordinator agent
     coordinator = Agent(
@@ -102,13 +89,11 @@ def main():
     community_analysis_address = community_analysis_agent.address
     prober_address = prober_agent.address
     vapi_address = vapi_agent.address
-    asi_email_address = asi_email_agent.address
 
     # Session storage
     sessions = {}
     prober_sessions = {}  # Separate storage for prober responses
     vapi_sessions = {}  # Separate storage for vapi responses
-    email_sessions = {}  # Separate storage for email responses
 
     # Create LLM summarizer
     llm_summarizer = SimpleLLMAgent(
@@ -315,12 +300,6 @@ def main():
         ctx.logger.info(f"Received Vapi response for session {msg.session_id}")
         ctx.logger.info(f"   Status: {msg.status}, Call ID: {msg.call_id}")
         vapi_sessions[msg.session_id] = msg
-
-    @coordinator.on_message(model=EmailResponse)
-    async def handle_email_response(ctx: Context, sender: str, msg: EmailResponse):
-        ctx.logger.info(f"Received email response for session {msg.session_id}")
-        ctx.logger.info(f"   Status: {msg.status}")
-        email_sessions[msg.session_id] = msg
 
     @coordinator.on_rest_post("/api/chat", ChatRequest, ChatResponse)
     async def handle_chat(ctx: Context, req: ChatRequest) -> ChatResponse:
@@ -624,8 +603,10 @@ def main():
                 # Continue anyway - call was probably initiated
 
             vapi_result = vapi_sessions.pop(session_id, None)
+            vapi_call_summary = ""
             if vapi_result and vapi_result.status == "success":
-                ctx.logger.info(f"✅ Vapi call initiated! Call ID: {vapi_result.call_id}")
+                ctx.logger.info(f"✅ Vapi call completed! Call ID: {vapi_result.call_id}")
+                vapi_call_summary = vapi_result.call_summary or ""
             else:
                 ctx.logger.warning("⚠️ Vapi call may be in progress")
 
@@ -675,7 +656,8 @@ Focus on practical, actionable steps the buyer should take next."""
                 success=True,
                 message=ai_summary,
                 leverage_score=prober_result.leverage_score,
-                next_actions=next_actions
+                next_actions=next_actions,
+                call_summary=vapi_call_summary
             )
 
         except Exception as e:
@@ -689,66 +671,6 @@ Focus on practical, actionable steps the buyer should take next."""
                 next_actions=[]
             )
 
-    @coordinator.on_rest_post("/api/send-email-asi", SendEmailRequest, SendEmailResponse)
-    async def handle_send_email_asi(ctx: Context, req: SendEmailRequest) -> SendEmailResponse:
-        ctx.logger.info(f"📧 ASI:1 Email request received")
-        ctx.logger.info(f"   To: {req.recipient_email}")
-        ctx.logger.info(f"   Subject: {req.subject}")
-        ctx.logger.info(f"   ASI:1 Agent: {req.agent_address}")
-
-        # Generate session ID
-        import uuid
-        session_id = str(uuid.uuid4())
-
-        try:
-            # Send email request to ASI email agent
-            await ctx.send(
-                asi_email_address,
-                EmailRequest(
-                    agent_address=req.agent_address,
-                    recipient_email=req.recipient_email,
-                    subject=req.subject,
-                    content=req.content,
-                    session_id=session_id
-                )
-            )
-
-            # Wait for email response (10 seconds timeout)
-            for _ in range(20):  # 10 seconds (20 * 0.5s)
-                if session_id in email_sessions:
-                    break
-                await asyncio.sleep(0.5)
-            else:
-                ctx.logger.warning("⚠️ Timeout waiting for email response")
-                return SendEmailResponse(
-                    status="error",
-                    message="Timeout waiting for email confirmation"
-                )
-
-            email_result = email_sessions.pop(session_id)
-
-            if email_result.status == "success":
-                ctx.logger.info("✅ Email sent successfully via ASI:1")
-                return SendEmailResponse(
-                    status="success",
-                    message="Email confirmation sent via ASI:1 agent"
-                )
-            else:
-                ctx.logger.error(f"❌ Email failed: {email_result.message}")
-                return SendEmailResponse(
-                    status="error",
-                    message=email_result.message
-                )
-
-        except Exception as e:
-            ctx.logger.error(f"❌ Email send error: {e}")
-            import traceback
-            traceback.print_exc()
-            return SendEmailResponse(
-                status="error",
-                message=str(e)
-            )
-
     # Create Bureau to run all agents
     bureau = Bureau(port=8080, endpoint="http://localhost:8080/submit")
     bureau.add(scoping_agent)
@@ -759,13 +681,11 @@ Focus on practical, actionable steps the buyer should take next."""
     bureau.add(community_analysis_agent)
     bureau.add(prober_agent)
     bureau.add(vapi_agent)
-    bureau.add(asi_email_agent)
     bureau.add(coordinator)
 
     print("✅ All agents configured")
     print(f"   - REST API: http://localhost:8080/api/chat")
     print(f"   - REST API: http://localhost:8080/api/negotiate")
-    print(f"   - REST API: http://localhost:8080/api/send-email-asi")
     print(f"   - Scoping: {scoping_address}")
     print(f"   - Research: {research_address}")
     print(f"   - General: {general_address}")
@@ -774,7 +694,6 @@ Focus on practical, actionable steps the buyer should take next."""
     print(f"   - Community Analysis: {community_analysis_address}")
     print(f"   - Prober: {prober_address}")
     print(f"   - Vapi: {vapi_address}")
-    print(f"   - ASI:1 Email: {asi_email_address}")
     print("=" * 60)
 
     bureau.run()
