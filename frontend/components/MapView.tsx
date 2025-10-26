@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Map, { Marker, Popup } from 'react-map-gl/mapbox';
 import { Property } from '@/lib/mockData';
 import NeighborhoodStats from './NeighborhoodStats';
+import { NegotiationModal } from './NegotiationModal';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapViewProps {
@@ -36,6 +37,7 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
   const mapRef = useRef<any>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [selectedPOI, setSelectedPOI] = useState<any>(null);
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
   const [viewState, setViewState] = useState({
     longitude: -122.4331,
     latitude: 37.7505,
@@ -255,8 +257,14 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
                   {selectedProperty.description.substring(0, 120)}...
                 </p>
                 <div className="pt-2 flex gap-2">
-                  <button className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2 px-3 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-blue-800 transition-all">
-                    Schedule Tour
+                  <button
+                    onClick={() => {
+                      setShowPopup(false);
+                      setShowNegotiationModal(true);
+                    }}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 px-3 rounded-lg text-sm font-semibold hover:from-purple-700 hover:to-pink-700 transition-all"
+                  >
+                    Start Negotiation 💬
                   </button>
                   <button className="flex-1 backdrop-blur-md bg-white/10 text-white py-2 px-3 rounded-lg text-sm font-semibold hover:bg-white/20 transition-all border border-white/20">
                     Details
@@ -335,15 +343,24 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
                 </div>
               </div>
 
-              {/* View Listing Button */}
-              <a
-                href={topResultDetails?.link || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 px-4 rounded-lg text-sm font-semibold hover:from-green-700 hover:to-green-800 transition-all text-center"
-              >
-                View Full Listing →
-              </a>
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                <a
+                  href={topResultDetails?.link || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 px-4 rounded-lg text-sm font-semibold hover:from-green-700 hover:to-green-800 transition-all text-center"
+                >
+                  View Full Listing →
+                </a>
+
+                <button
+                  onClick={() => setShowNegotiationModal(true)}
+                  className="block w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg text-sm font-semibold hover:from-blue-700 hover:to-purple-700 transition-all text-center border border-white/10"
+                >
+                  Start Negotiation 💬
+                </button>
+              </div>
 
               {/* Status */}
               <div className="pt-2 border-t border-white/10">
@@ -372,6 +389,30 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
         </div>
       )}
       </div>
+
+      {/* Negotiation Modal */}
+      {showNegotiationModal && (selectedProperty || (topResultCoords && topResultDetails)) && (
+        <NegotiationModal
+          property={
+            selectedProperty || {
+              id: currentListingIndex ?? 0,
+              address: topResultCoords!.address,
+              city: topResultDetails!.city || 'N/A',
+              state: topResultDetails!.state || 'N/A',
+              price: topResultDetails!.price || 0,
+              bedrooms: topResultDetails!.bedrooms || 0,
+              bathrooms: topResultDetails!.bathrooms || 0,
+              sqft: topResultDetails!.sqft || 0,
+              latitude: topResultCoords!.latitude,
+              longitude: topResultCoords!.longitude,
+              description: topResultDetails!.description || '',
+              imageUrl: topResultCoords!.image_url || '',
+              propertyType: topResultDetails!.propertyType || 'Residential',
+            }
+          }
+          onClose={() => setShowNegotiationModal(false)}
+        />
+      )}
 
       <style jsx global>{`
         .mapboxgl-popup-content {

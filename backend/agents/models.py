@@ -151,6 +151,31 @@ class CommunityAnalysisResponse(Model):
     session_id: str
 
 
+# Prober Agent Models
+class ProberFinding(Model):
+    """Individual finding that could be negotiation leverage"""
+    category: str  # e.g., "time_on_market", "price_history", "property_issues", "owner_situation"
+    summary: str  # Brief description
+    leverage_score: float  # 0-10, how useful for negotiation
+    details: str  # Full details
+    source_url: Optional[str] = None
+
+
+class ProberRequest(Model):
+    """Request to probe a property for negotiation intelligence"""
+    address: str
+    session_id: str
+
+
+class ProberResponse(Model):
+    """Response with intelligence about the property"""
+    address: str
+    findings: List[ProberFinding]
+    overall_assessment: str  # LLM summary of negotiation position
+    leverage_score: float  # Overall 0-10 score
+    session_id: str
+
+
 # Final Result Model
 class EstateSearchResult(Model):
     """Complete result of the estate search process"""
