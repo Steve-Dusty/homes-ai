@@ -27,8 +27,8 @@ class VapiClient:
         }
 
         # Default IDs (can be overridden)
-        self.assistant_id = os.getenv("VAPI_ASSISTANT_ID", "6f723c39-5410-4b55-977f-ad80a1b947be")
-        self.phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID", "1c14896d-6c86-4014-b9de-b5bc873c059b")
+        self.assistant_id = os.getenv("VAPI_ASSISTANT_ID", "24bb8602-f087-42bd-99e5-7edd52c3b4ea")
+        self.phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID", "f21ad394-d134-4386-8ec9-9319500b2695")
 
     def update_assistant(
         self,

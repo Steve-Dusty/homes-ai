@@ -18,6 +18,7 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isProbing, setIsProbing] = useState(false);
   const [isCallInProgress, setIsCallInProgress] = useState(false);
   const [callSummary, setCallSummary] = useState<any>(null);
 
@@ -34,9 +35,9 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
         additional_info: formData.additionalInfo,
       });
 
-      // Immediately show call in progress screen
+      // Immediately show probing screen
       setIsSubmitting(false);
-      setIsCallInProgress(true);
+      setIsProbing(true);
 
       const response = await fetch('http://localhost:8080/api/negotiate', {
         method: 'POST',
@@ -58,10 +59,16 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
         const errorText = await response.text();
         console.error('Error response:', errorText);
         // Reset to form and show error
+        setIsProbing(false);
         setIsCallInProgress(false);
         setError(`Failed to start negotiation: ${response.status}`);
         return;
       }
+
+      // When we get response, probing is done and call has started
+      // Transition from probing to call in progress
+      setIsProbing(false);
+      setIsCallInProgress(true);
 
       const result = await response.json();
       console.log('Negotiation completed:', result);
@@ -78,6 +85,7 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
       }
     } catch (err) {
       console.error('Negotiation error:', err);
+      setIsProbing(false);
       setIsCallInProgress(false);
       setError('Failed to start negotiation. Please try again.');
     }
@@ -121,6 +129,43 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
 
     return actions;
   };
+
+  // Probing screen - gathering intelligence
+  if (isProbing) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="relative w-full max-w-md bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-blue-500/30 rounded-2xl shadow-2xl backdrop-blur-xl p-8" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col items-center space-y-6">
+            {/* Animated search icon */}
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping">
+                <div className="w-20 h-20 rounded-full bg-blue-500/30"></div>
+              </div>
+              <div className="relative z-10 w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full flex items-center justify-center">
+                <svg className="w-10 h-10 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Loading text */}
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-white">Probing Property</h3>
+              <p className="text-white/60">Gathering intelligence and leverage data...</p>
+            </div>
+
+            {/* Loading dots */}
+            <div className="flex gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   // Loading screen during call
   if (isCallInProgress) {
