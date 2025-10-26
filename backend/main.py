@@ -17,6 +17,8 @@ from agents.models import (
     LocalDiscoveryResponse,
     CommunityAnalysisRequest,
     CommunityAnalysisResponse,
+    ProberRequest,
+    ProberResponse,
 )
 from agents.scoping_agent import create_scoping_agent
 from agents.research_agent import create_research_agent
@@ -24,6 +26,8 @@ from agents.general_agent import create_general_agent
 from agents.mapbox_agent import create_mapbox_agent
 from agents.local_discovery_agent import create_local_discovery_agent
 from agents.community_analysis_agent import create_community_analysis_agent
+from agents.prober_agent import create_prober_agent
+from agents.vapi_agent import create_vapi_agent, VapiRequest, VapiResponse
 
 
 # REST API Models
@@ -33,6 +37,18 @@ class ChatRequest(Model):
 
 
 class ChatResponse(Model):
+    status: str
+    data: Dict[str, Any]
+
+
+class NegotiateRequest(Model):
+    address: str
+    name: str
+    email: str
+    additional_info: str = ""
+
+
+class NegotiateResponse(Model):
     status: str
     data: Dict[str, Any]
 
@@ -49,6 +65,8 @@ def main():
     mapbox_agent = create_mapbox_agent(port=8004)
     local_discovery_agent = create_local_discovery_agent(port=8005)
     community_analysis_agent = create_community_analysis_agent(port=8006)
+    prober_agent = create_prober_agent(port=8007)
+    vapi_agent = create_vapi_agent(port=8008)
 
     # Create coordinator agent
     coordinator = Agent(
@@ -65,9 +83,13 @@ def main():
     mapbox_address = mapbox_agent.address
     local_discovery_address = local_discovery_agent.address
     community_analysis_address = community_analysis_agent.address
+    prober_address = prober_agent.address
+    vapi_address = vapi_agent.address
 
     # Session storage
     sessions = {}
+    prober_sessions = {}  # Separate storage for prober responses
+    vapi_sessions = {}  # Separate storage for vapi responses
 
     @coordinator.on_event("startup")
     async def startup(ctx: Context):
@@ -256,6 +278,18 @@ def main():
             sessions[msg.session_id] = {}
 
         sessions[msg.session_id]["community_analysis"] = msg
+
+    @coordinator.on_message(model=ProberResponse)
+    async def handle_prober_response(ctx: Context, sender: str, msg: ProberResponse):
+        ctx.logger.info(f"Received prober response for session {msg.session_id}")
+        ctx.logger.info(f"   Found {len(msg.findings)} findings, leverage score: {msg.leverage_score}/10")
+        prober_sessions[msg.session_id] = msg
+
+    @coordinator.on_message(model=VapiResponse)
+    async def handle_vapi_response(ctx: Context, sender: str, msg: VapiResponse):
+        ctx.logger.info(f"Received Vapi response for session {msg.session_id}")
+        ctx.logger.info(f"   Status: {msg.status}, Call ID: {msg.call_id}")
+        vapi_sessions[msg.session_id] = msg
 
     @coordinator.on_rest_post("/api/chat", ChatRequest, ChatResponse)
     async def handle_chat(ctx: Context, req: ChatRequest) -> ChatResponse:
@@ -469,6 +503,132 @@ def main():
                 data={"message": str(e)}
             )
 
+    @coordinator.on_rest_post("/api/negotiate", NegotiateRequest, NegotiateResponse)
+    async def handle_negotiate(ctx: Context, req: NegotiateRequest) -> NegotiateResponse:
+        ctx.logger.info(f"🤝 Negotiation request for: {req.address}")
+        ctx.logger.info(f"   User: {req.name} ({req.email})")
+
+        # Generate session ID
+        import uuid
+        session_id = str(uuid.uuid4())
+
+        try:
+            # Send probe request to prober agent
+            ctx.logger.info(f"📤 Sending probe request to prober agent...")
+            await ctx.send(
+                prober_address,
+                ProberRequest(
+                    address=req.address,
+                    session_id=session_id
+                )
+            )
+
+            # Wait for prober response (60 seconds timeout)
+            for _ in range(120):  # 60 seconds (120 * 0.5s)
+                if session_id in prober_sessions:
+                    break
+                await asyncio.sleep(0.5)
+            else:
+                ctx.logger.error("❌ Timeout waiting for prober response")
+                return NegotiateResponse(
+                    status="error",
+                    data={"message": "Timeout waiting for property intelligence. Please try again."}
+                )
+
+            # Get prober response
+            prober_result = prober_sessions.pop(session_id)
+
+            # Convert findings to dict format
+            findings_data = [
+                {
+                    "category": f.category,
+                    "summary": f.summary,
+                    "leverage_score": f.leverage_score,
+                    "details": f.details,
+                    "source_url": f.source_url
+                }
+                for f in prober_result.findings
+            ]
+
+            # Create structured JSON for Vapi system prompt
+            vapi_context = {
+                "property": {
+                    "address": req.address,
+                },
+                "user": {
+                    "name": req.name,
+                    "email": req.email,
+                    "preferences": req.additional_info
+                },
+                "intelligence": {
+                    "leverage_score": prober_result.leverage_score,
+                    "overall_assessment": prober_result.overall_assessment,
+                    "findings": findings_data
+                }
+            }
+
+            # Print final JSON result
+            import json
+            print("\n" + "="*80)
+            print("NEGOTIATION INTELLIGENCE RESULT")
+            print("="*80)
+            print(json.dumps(vapi_context, indent=2))
+            print("="*80 + "\n")
+
+            # Call Vapi agent to make the negotiation call
+            ctx.logger.info("📞 Sending request to Vapi agent...")
+            await ctx.send(
+                vapi_address,
+                VapiRequest(
+                    property_address=req.address,
+                    user_name=req.name,
+                    user_email=req.email,
+                    user_preferences=req.additional_info,
+                    intelligence=vapi_context['intelligence'],
+                    session_id=session_id
+                )
+            )
+
+            # Wait for Vapi response (30 seconds timeout)
+            for _ in range(60):  # 30 seconds (60 * 0.5s)
+                if session_id in vapi_sessions:
+                    break
+                await asyncio.sleep(0.5)
+            else:
+                ctx.logger.warning("⚠️ Timeout waiting for Vapi response (call may still be in progress)")
+                # Continue anyway - call was probably initiated
+
+            vapi_result = vapi_sessions.pop(session_id, None)
+            if vapi_result and vapi_result.status == "success":
+                ctx.logger.info(f"✅ Vapi call initiated! Call ID: {vapi_result.call_id}")
+                call_message = f"Negotiation call initiated! Call ID: {vapi_result.call_id}"
+            else:
+                call_message = "Negotiation call may be in progress. Check Vapi dashboard."
+
+            # TODO: Send email confirmation
+
+            return NegotiateResponse(
+                status="success",
+                data={
+                    "address": req.address,
+                    "findings": findings_data,
+                    "overall_assessment": prober_result.overall_assessment,
+                    "leverage_score": prober_result.leverage_score,
+                    "message": f"Property intelligence gathered. {call_message}",
+                    "vapi_context": vapi_context,  # Include for debugging
+                    "call_id": vapi_result.call_id if vapi_result else None
+                }
+            )
+
+        except Exception as e:
+            ctx.logger.error(f"❌ Negotiation error: {e}")
+            import traceback
+            traceback.print_exc()
+            return NegotiateResponse(
+                status="error",
+                data={"message": str(e)}
+            )
+
     # Create Bureau to run all agents
     bureau = Bureau(port=8080, endpoint="http://localhost:8080/submit")
     bureau.add(scoping_agent)
@@ -477,16 +637,21 @@ def main():
     bureau.add(mapbox_agent)
     bureau.add(local_discovery_agent)
     bureau.add(community_analysis_agent)
+    bureau.add(prober_agent)
+    bureau.add(vapi_agent)
     bureau.add(coordinator)
 
     print("✅ All agents configured")
     print(f"   - REST API: http://localhost:8080/api/chat")
+    print(f"   - REST API: http://localhost:8080/api/negotiate")
     print(f"   - Scoping: {scoping_address}")
     print(f"   - Research: {research_address}")
     print(f"   - General: {general_address}")
     print(f"   - Mapbox: {mapbox_address}")
     print(f"   - Local Discovery: {local_discovery_address}")
     print(f"   - Community Analysis: {community_analysis_address}")
+    print(f"   - Prober: {prober_address}")
+    print(f"   - Vapi: {vapi_address}")
     print("=" * 60)
 
     bureau.run()

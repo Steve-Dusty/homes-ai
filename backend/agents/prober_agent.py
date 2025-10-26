@@ -40,30 +40,56 @@ Return ONLY valid JSON, no markdown formatting or additional text."""
             text = item.get("content", "")[:2000]  # Limit to first 2000 chars per source
             content_summary += f"\n\n--- Source {idx}: {url} ---\n{text}\n"
 
-        prompt = f"""Analyze the following information about a property to find leverage points for negotiation.
+        prompt = f"""You are a ruthless real estate negotiation analyst. Your job is to find NEGATIVE information, red flags, and weaknesses about this property that a buyer can use as leverage to negotiate a LOWER price.
 
 Property Address: {address}
 
 Scraped Information:
 {content_summary}
 
-Extract negotiation leverage in the following categories:
-1. **time_on_market**: How long has it been listed? Price reductions?
-2. **price_history**: Previous sale prices, listing price changes
-3. **property_issues**: Repairs needed, violations, permits, problems
-4. **owner_situation**: Foreclosure, estate sale, divorce, relocation, financial distress
-5. **market_conditions**: Is it a buyer's or seller's market? Days on market trends?
+FOCUS ON NEGATIVE INFORMATION ONLY. Extract leverage points in these categories:
+
+1. **time_on_market**:
+   - How many days on market? (longer = desperate seller)
+   - Price reductions? (indicates overpriced or lack of interest)
+   - Multiple listing attempts?
+
+2. **price_history**:
+   - Recent price drops
+   - Bought high, selling low (financial pressure)
+   - Overpriced compared to comps
+
+3. **property_issues**:
+   - Foundation, roof, plumbing problems
+   - Code violations, unpermitted work
+   - Deferred maintenance
+   - Needed repairs mentioned in listing
+
+4. **owner_situation**:
+   - Foreclosure risk, tax liens
+   - Estate sale (heirs want quick cash)
+   - Divorce (forced sale)
+   - Job relocation (time pressure)
+   - Financial distress signals
+
+5. **market_conditions**:
+   - Buyer's market indicators
+   - High inventory in area
+   - Declining neighborhood values
+   - Economic factors favoring buyers
+
+**IMPORTANT**: Only include findings that give the BUYER an advantage. Skip positive information. Be specific with numbers (days on market, price reductions, etc).
 
 For each finding, provide:
 - category (one of the above)
-- summary (1-2 sentences)
-- leverage_score (0-10, how useful for negotiation)
-- details (more context)
+- summary (1-2 sentences highlighting the NEGATIVE aspect)
+- leverage_score (0-10, how useful for negotiation - higher = more leverage)
+- details (specific numbers, dates, problems)
 - source_url (if applicable)
 
 Also provide:
-- overall_assessment: A 2-3 sentence summary of the buyer's negotiation position
-- leverage_score: Overall score 0-10 (10 = strong buyer leverage)
+- overall_assessment: A 2-3 sentence summary of the buyer's negotiation position focusing on WEAKNESSES found
+- leverage_score: Overall score 0-10 (10 = strong buyer leverage due to many issues found)
 
 Return ONLY valid JSON in this exact format:
 {{

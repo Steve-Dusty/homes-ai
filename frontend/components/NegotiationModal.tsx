@@ -16,14 +16,63 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
     additionalInfo: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Backend integration will handle submission
-    console.log('Negotiation submitted:', {
-      propertyId: property.id,
-      ...formData,
-    });
-    onClose();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      console.log('Sending negotiation request:', {
+        address: property.address,
+        name: formData.name,
+        email: formData.email,
+        additional_info: formData.additionalInfo,
+      });
+
+      const response = await fetch('http://localhost:8080/api/negotiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address: property.address,
+          name: formData.name,
+          email: formData.email,
+          additional_info: formData.additionalInfo,
+        }),
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to start negotiation: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Negotiation started successfully:', result);
+
+      // Check if response has the expected structure
+      if (result.status === 'success' && result.data) {
+        const { leverage_score, message, findings, overall_assessment } = result.data;
+
+        // Show success and close modal
+        alert(`Negotiation intelligence gathered!\n\nLeverage Score: ${leverage_score}/10\n\n${message}\n\nFindings: ${findings.length} leverage points found`);
+        onClose();
+      } else {
+        throw new Error(result.data?.message || 'Unknown error');
+      }
+    } catch (err) {
+      console.error('Negotiation error:', err);
+      setError('Failed to start negotiation. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (
@@ -86,19 +135,28 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
             <p className="text-lg text-white/90 font-semibold">
               {property.address}
             </p>
-            <p className="text-sm text-white/70">
-              {property.city}, {property.state}
-            </p>
-            <div className="flex items-center gap-2 mt-3">
-              <span className="text-sm text-white/60">Listed Price:</span>
-              <span className="text-xl font-bold text-green-400">
-                {formatPrice(property.price)}
-              </span>
-            </div>
-            <div className="text-xs text-white/50 mt-1">
-              {property.bedrooms} beds • {property.bathrooms} baths •{' '}
-              {property.sqft.toLocaleString()} sqft
-            </div>
+            {property.city && property.state && property.city !== 'N/A' && property.state !== 'N/A' && (
+              <p className="text-sm text-white/70">
+                {property.city}, {property.state}
+              </p>
+            )}
+            {property.price && property.price > 0 && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-sm text-white/60">Listed Price:</span>
+                <span className="text-xl font-bold text-green-400">
+                  {formatPrice(property.price)}
+                </span>
+              </div>
+            )}
+            {(property.bedrooms || property.bathrooms || property.sqft) && (
+              <div className="text-xs text-white/50 mt-1">
+                {property.bedrooms ? `${property.bedrooms} beds` : ''}
+                {property.bedrooms && (property.bathrooms || property.sqft) ? ' • ' : ''}
+                {property.bathrooms ? `${property.bathrooms} baths` : ''}
+                {property.bathrooms && property.sqft ? ' • ' : ''}
+                {property.sqft ? `${property.sqft.toLocaleString()} sqft` : ''}
+              </div>
+            )}
           </div>
         </div>
 
@@ -183,20 +241,29 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
             </div>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <p className="text-red-300 text-sm">{error}</p>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg text-white font-medium transition-all"
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-lg text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-lg text-white font-semibold shadow-lg shadow-purple-500/20 transition-all"
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-lg text-white font-semibold shadow-lg shadow-purple-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Start AI Negotiation
+              {isSubmitting ? 'Starting...' : 'Start AI Negotiation'}
             </button>
           </div>
         </form>
