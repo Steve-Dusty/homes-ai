@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Map, { Marker, Popup } from 'react-map-gl/mapbox';
+import Map, { Marker, Popup, Source, Layer } from 'react-map-gl/mapbox';
 import { Property } from '@/lib/mockData';
 import NeighborhoodStats from './NeighborhoodStats';
 import { NegotiationModal } from './NegotiationModal';
+import { createCircle, fetchRoute, fetchDistanceMatrix, formatDistance, formatDuration } from '@/lib/mapUtils';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 interface MapViewProps {
@@ -43,6 +44,11 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
     latitude: 37.7505,
     zoom: 10,
   });
+  const [radiusCircle, setRadiusCircle] = useState<any>(null);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [poiDistances, setPoiDistances] = useState<Record<number, { distance: number; duration: number }>>({});
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+  const [currentRadiusMeters, setCurrentRadiusMeters] = useState<number>(0);
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || 'pk.eyJ1Ijoic3RldmVkdXN0eSIsImEiOiJjbWd4am05Z2IxZXhyMmtwdTg1cnU4cmYxIn0.zpfFRf-6xH6ivorwg_ZJ3w';
 
@@ -82,6 +88,102 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
     setSelectedPOI(null);
   }, [topResultCoords, currentListingIndex]);
 
+  // Create radius circle and fetch routes when top result changes
+  useEffect(() => {
+    if (!topResultCoords || currentPOIs.length === 0) {
+      setRadiusCircle(null);
+      setRoutes([]);
+      setPoiDistances({});
+      return;
+    }
+
+    const center: [number, number] = [topResultCoords.longitude, topResultCoords.latitude];
+
+    // Fetch routes and distances
+    const loadRoutesAndDistances = async () => {
+      setIsLoadingRoutes(true);
+
+      try {
+        // First, get distance matrix for all POIs
+        const poiCoords: [number, number][] = currentPOIs.map((poi: any) => [poi.longitude, poi.latitude]);
+        const matrixData = await fetchDistanceMatrix([center], poiCoords, 'driving', mapboxToken);
+
+        if (matrixData) {
+          // Store distances
+          const distanceMap: Record<number, { distance: number; duration: number }> = {};
+
+          matrixData.distances[0].forEach((distance: number, index: number) => {
+            distanceMap[index] = {
+              distance,
+              duration: matrixData.durations[0][index]
+            };
+          });
+          setPoiDistances(distanceMap);
+
+          // Calculate straight-line distance to farthest POI for circle radius
+          let maxStraightLineDistance = 0;
+          currentPOIs.forEach((poi: any) => {
+            const poiLat = poi.latitude;
+            const poiLng = poi.longitude;
+
+            // Calculate straight-line distance using Haversine formula
+            const R = 6371000; // Earth's radius in meters
+            const dLat = ((poiLat - center[1]) * Math.PI) / 180;
+            const dLon = ((poiLng - center[0]) * Math.PI) / 180;
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos((center[1] * Math.PI) / 180) *
+                Math.cos((poiLat * Math.PI) / 180) *
+                Math.sin(dLon / 2) *
+                Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c;
+
+            if (distance > maxStraightLineDistance) {
+              maxStraightLineDistance = distance;
+            }
+          });
+
+          // Create circle with radius based on farthest POI (add small buffer)
+          const radiusMeters = maxStraightLineDistance * 1.05;
+          const circle = createCircle(center, radiusMeters);
+          setRadiusCircle(circle);
+          setCurrentRadiusMeters(radiusMeters);
+        }
+
+        // Then fetch individual routes for visualization
+        const routePromises = currentPOIs.map(async (poi: any) => {
+          const destination: [number, number] = [poi.longitude, poi.latitude];
+          const routeData = await fetchRoute(center, destination, 'driving', mapboxToken);
+
+          if (routeData) {
+            return {
+              type: 'Feature',
+              geometry: routeData.geometry,
+              properties: {
+                distance: routeData.distance,
+                duration: routeData.duration,
+                poiName: poi.name,
+                poiCategory: poi.category
+              }
+            };
+          }
+          return null;
+        });
+
+        const routeResults = await Promise.all(routePromises);
+        const validRoutes = routeResults.filter(r => r !== null);
+        setRoutes(validRoutes);
+      } catch (error) {
+        console.error('[MapView] Error fetching routes:', error);
+      } finally {
+        setIsLoadingRoutes(false);
+      }
+    };
+
+    loadRoutesAndDistances();
+  }, [topResultCoords, currentPOIs, mapboxToken]);
+
   return (
     <div className="relative h-full w-full">
       {/* Stats Container */}
@@ -106,6 +208,50 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
         mapboxAccessToken={mapboxToken}
         style={{ width: '100%', height: '100%' }}
       >
+        {/* Radius Circle Layer */}
+        {radiusCircle && (
+          <Source id="radius-circle" type="geojson" data={radiusCircle}>
+            <Layer
+              id="radius-circle-fill"
+              type="fill"
+              paint={{
+                'fill-color': '#3B82F6',
+                'fill-opacity': 0.1
+              }}
+            />
+            <Layer
+              id="radius-circle-outline"
+              type="line"
+              paint={{
+                'line-color': '#3B82F6',
+                'line-width': 2,
+                'line-dasharray': [2, 2]
+              }}
+            />
+          </Source>
+        )}
+
+        {/* Route Lines Layer */}
+        {routes.length > 0 && (
+          <Source
+            id="routes"
+            type="geojson"
+            data={{
+              type: 'FeatureCollection',
+              features: routes
+            }}
+          >
+            <Layer
+              id="routes-line"
+              type="line"
+              paint={{
+                'line-color': '#8B5CF6',
+                'line-width': 3,
+                'line-opacity': 0.6
+              }}
+            />
+          </Source>
+        )}
         {/* Top Result Marker - Special Star Marker */}
         {topResultCoords && (
           <Marker
@@ -212,11 +358,30 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
                   {selectedPOI.address && (
                     <p className="text-gray-400 text-xs mt-1">{selectedPOI.address}</p>
                   )}
-                  {selectedPOI.distance_meters && (
-                    <p className="text-blue-300 text-xs mt-1">
-                      {(selectedPOI.distance_meters / 1609.34).toFixed(2)} miles away
-                    </p>
-                  )}
+                  {(() => {
+                    // Find POI index to get actual route distance
+                    const poiIndex = currentPOIs.findIndex((p: any) =>
+                      p.latitude === selectedPOI.latitude && p.longitude === selectedPOI.longitude
+                    );
+                    const distanceData = poiDistances[poiIndex];
+
+                    if (distanceData) {
+                      return (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-purple-300 text-xs font-semibold">
+                            🚗 {formatDistance(distanceData.distance)} ({formatDuration(distanceData.duration)})
+                          </p>
+                        </div>
+                      );
+                    } else if (selectedPOI.distance_meters) {
+                      return (
+                        <p className="text-blue-300 text-xs mt-1">
+                          📏 {(selectedPOI.distance_meters / 1609.34).toFixed(2)} miles away (straight line)
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               </div>
             </div>
@@ -281,6 +446,46 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
           </Popup>
         )}
       </Map>
+
+      {/* Map Legend / Info Box */}
+      {topResultCoords && currentPOIs.length > 0 && (
+        <div className="absolute top-20 left-4 z-20">
+          <div className="backdrop-blur-xl bg-slate-900/95 border border-blue-500/30 rounded-lg shadow-2xl p-3 min-w-[200px]">
+            <h4 className="text-white font-semibold text-sm mb-2">Map Legend</h4>
+            <div className="space-y-2 text-xs">
+              {currentRadiusMeters > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5 bg-blue-500 border-dashed border border-blue-500"></div>
+                  <span className="text-gray-300">{formatDistance(currentRadiusMeters)} radius</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-0.5 bg-purple-500"></div>
+                <span className="text-gray-300">Routes to POIs</span>
+              </div>
+              {!isLoadingRoutes && routes.length > 0 && (
+                <div className="pt-2 border-t border-white/10 mt-2">
+                  <p className="text-green-300 font-semibold">
+                    ✓ {routes.length} route{routes.length !== 1 ? 's' : ''} calculated
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Indicator for Routes */}
+      {isLoadingRoutes && (
+        <div className="absolute top-20 right-4 z-20">
+          <div className="backdrop-blur-xl bg-slate-900/95 border border-purple-500/30 rounded-lg shadow-2xl p-3">
+            <div className="flex items-center gap-2 text-purple-300 text-sm">
+              <div className="animate-spin w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full"></div>
+              <span>Calculating routes...</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Sidebar for Top Result */}
       {topResultCoords && topResultDetails && (

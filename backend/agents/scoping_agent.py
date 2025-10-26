@@ -19,13 +19,15 @@ def create_scoping_agent(port: int = 8001):
     # LLM client for conversation
     llm_client = SimpleLLMAgent(
         "scoping_agent",
-        system_prompt="""You are a friendly real estate agent helping users find their dream home in the San Francisco Bay Area.
+        system_prompt="""You are a friendly real estate agent helping users find their dream home.
 
 Your job is to gather the following information from the user through natural conversation:
 1. Budget (minimum and maximum price range)
 2. Number of bedrooms
 3. Number of bathrooms
-4. Specific location within Bay Area (cities like San Francisco, Oakland, San Jose, etc.)
+4. Specific location within their desired area
+
+
 
 CRITICAL RULES:
 - Be conversational and friendly
