@@ -1,4 +1,4 @@
-# Real Estate Agent - AI-Powered Property Search
+# Homes AI - AI-Powered Property Search
 
 An intelligent real estate search platform powered by Fetch.ai uAgents, ASI-1 mini, and MCP tools. Natural conversation meets property discovery.
 

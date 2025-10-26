@@ -60,7 +60,7 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
     console.log('[MapView] Current listing index:', currentListingIndex);
     console.log('[MapView] Top result details:', topResultDetails);
     console.log('[MapView] Current POIs:', currentPOIs);
-  }, [currentListingIndex, topResultDetails, currentPOIs]);
+  }, [currentListingIndex, topResultDetails]);
 
   useEffect(() => {
     if (selectedProperty && mapRef.current) {
@@ -182,7 +182,8 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
     };
 
     loadRoutesAndDistances();
-  }, [topResultCoords, currentPOIs, mapboxToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topResultCoords, topResultDetails, mapboxToken]);
 
   return (
     <div className="relative h-full w-full">
@@ -447,9 +448,9 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
         )}
       </Map>
 
-      {/* Map Legend / Info Box */}
+      {/* Map Legend / Info Box - Positioned to the left of listing info */}
       {topResultCoords && currentPOIs.length > 0 && (
-        <div className="absolute top-20 left-4 z-20">
+        <div className="absolute top-[100px] right-[344px] z-20">
           <div className="backdrop-blur-xl bg-slate-900/95 border border-blue-500/30 rounded-lg shadow-2xl p-3 min-w-[200px]">
             <h4 className="text-white font-semibold text-sm mb-2">Map Legend</h4>
             <div className="space-y-2 text-xs">
@@ -541,9 +542,29 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
                   </p>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-2.5">
-                  <p className="text-gray-400 text-xs">Rank</p>
+                  <p className="text-gray-400 text-xs">Price</p>
                   <p className="text-green-400 font-bold text-sm mt-0.5">
-                    #{topResultDetails.position || topResultDetails.rank || topResultDetails.global_rank || (currentListingIndex ?? 0) + 1}
+                    {(() => {
+                      // Try to extract price from title or description
+                      const text = `${topResultDetails.title || ''} ${topResultDetails.description || ''}`;
+
+                      // Match patterns like $1,200,000 or $1.2M or $2,500/mo
+                      const priceMatch = text.match(/\$[\d,]+(?:\.[\d]+)?[KMB]?(?:\/mo)?/i);
+                      if (priceMatch) {
+                        const price = priceMatch[0];
+                        // Check if it's a rental (contains /mo or /month)
+                        const isRental = /\/mo/i.test(price);
+                        return price;
+                      }
+
+                      // Fallback: Try to find any dollar amount
+                      const dollarMatch = text.match(/\$[\d,]+/);
+                      if (dollarMatch) {
+                        return dollarMatch[0];
+                      }
+
+                      return 'Call for Price';
+                    })()}
                   </p>
                 </div>
               </div>

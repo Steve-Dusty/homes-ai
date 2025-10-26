@@ -18,6 +18,8 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCallInProgress, setIsCallInProgress] = useState(false);
+  const [callSummary, setCallSummary] = useState<any>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,15 +59,16 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
       const result = await response.json();
       console.log('Negotiation started successfully:', result);
 
-      // Check if response has the expected structure
-      if (result.status === 'success' && result.data) {
-        const { leverage_score, message, findings, overall_assessment } = result.data;
+      // Check if response has success flag
+      if (result.success) {
+        // Show loading screen for call
+        setIsSubmitting(false);
+        setIsCallInProgress(true);
 
-        // Show success and close modal
-        alert(`Negotiation intelligence gathered!\n\nLeverage Score: ${leverage_score}/10\n\n${message}\n\nFindings: ${findings.length} leverage points found`);
-        onClose();
+        // Store the result directly (not wrapped in .data)
+        setCallSummary(result);
       } else {
-        throw new Error(result.data?.message || 'Unknown error');
+        throw new Error(result.message || 'Unknown error');
       }
     } catch (err) {
       console.error('Negotiation error:', err);
@@ -92,6 +95,166 @@ export function NegotiationModal({ property, onClose }: NegotiationModalProps) {
       maximumFractionDigits: 0,
     }).format(price);
   };
+
+  // Generate next actions from call summary if not provided
+  const generateNextActions = (summary: any): string[] => {
+    const actions = [];
+
+    if (summary?.findings && summary.findings.length > 0) {
+      actions.push('Review identified leverage points with your agent');
+      actions.push('Prepare counter-offer based on findings');
+    }
+
+    if (summary?.leverage_score && summary.leverage_score < 5) {
+      actions.push('Consider improving your negotiation position');
+    } else if (summary?.leverage_score && summary.leverage_score >= 7) {
+      actions.push('Proceed with confidence - strong negotiation position');
+    }
+
+    actions.push('Schedule follow-up call with listing agent');
+    actions.push('Prepare offer documentation');
+
+    return actions;
+  };
+
+  // Loading screen during call
+  if (isCallInProgress) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="relative w-full max-w-md bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-purple-500/30 rounded-2xl shadow-2xl backdrop-blur-xl p-8" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col items-center space-y-6">
+            {/* Animated phone icon */}
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping">
+                <div className="w-20 h-20 rounded-full bg-purple-500/30"></div>
+              </div>
+              <div className="relative z-10 w-20 h-20 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
+                <svg className="w-10 h-10 text-white animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Loading text */}
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-white">Call in Progress</h3>
+              <p className="text-white/60">Our AI agent is negotiating on your behalf...</p>
+            </div>
+
+            {/* Loading dots */}
+            <div className="flex gap-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+
+            {/* Simulate call completion button (for testing) */}
+            <button
+              onClick={() => {
+                setIsCallInProgress(false);
+                // Call summary is already set
+              }}
+              className="mt-4 px-6 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm transition-all"
+            >
+              Complete Call
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  // Show call summary after call completes
+  if (callSummary) {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-green-500/30 rounded-2xl shadow-2xl backdrop-blur-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors z-10"
+            aria-label="Close modal"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* Header */}
+          <div className="p-6 border-b border-white/10">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">Call Summary</h2>
+                <p className="text-sm text-white/60">Negotiation completed successfully</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary Content */}
+          <div className="p-6 space-y-6">
+            {/* Leverage Score */}
+            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-white/80 font-medium">Leverage Score</span>
+                <span className="text-3xl font-bold text-purple-400">{callSummary.leverage_score}/10</span>
+              </div>
+            </div>
+
+            {/* Message */}
+            {callSummary.message && (
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-white/90">Summary</h3>
+                <p className="text-white/70 leading-relaxed">{callSummary.message}</p>
+              </div>
+            )}
+
+            {/* Next Actions */}
+            {callSummary.next_actions && callSummary.next_actions.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-white/90">Next Actions</h3>
+                <div className="space-y-2">
+                  {callSummary.next_actions.map((action: string, index: number) => (
+                    <div key={index} className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-blue-400 text-xs font-bold">{index + 1}</span>
+                      </div>
+                      <p className="text-white/80 text-sm">{action}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 border-t border-white/10">
+            <button
+              onClick={onClose}
+              className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg text-white font-semibold shadow-lg shadow-green-500/20 transition-all"
+            >
+              Complete & Close
+            </button>
+            <p className="text-center text-white/40 text-xs mt-3">
+              Review your next actions above and proceed with your negotiation strategy
+            </p>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div

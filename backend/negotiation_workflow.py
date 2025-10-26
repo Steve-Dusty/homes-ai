@@ -18,6 +18,7 @@ from uagents import Bureau
 
 from agents.prober_agent import create_prober_agent
 from agents.models import ProberRequest, ProberResponse, ProberFinding
+from agents.llm_client import SimpleLLMAgent
 
 
 # ============================================================================
@@ -32,23 +33,12 @@ class NegotiateRequest(BaseModel):
     additional_info: Optional[str] = None
 
 
-class ProberFindingResponse(BaseModel):
-    """Individual finding for API response"""
-    category: str
-    summary: str
-    leverage_score: float
-    details: str
-    source_url: Optional[str] = None
-
-
 class NegotiateResponse(BaseModel):
-    """Response to frontend with prober results"""
+    """Simplified response with just summary and success status"""
     success: bool
-    address: str
-    findings: List[ProberFindingResponse]
-    overall_assessment: str
+    message: str
     leverage_score: float
-    message: Optional[str] = None
+    next_actions: List[str]
 
 
 # ============================================================================
@@ -69,6 +59,12 @@ app.add_middleware(
 # Create prober agent
 prober_agent = create_prober_agent(port=8007)
 prober_address = prober_agent.address
+
+# Create LLM summarizer
+llm_summarizer = SimpleLLMAgent(
+    name="NegotiationSummarizer",
+    system_prompt="You are an expert real estate negotiation analyst. Summarize negotiation conversations concisely."
+)
 
 # Session storage for responses
 prober_responses = {}
@@ -143,28 +139,55 @@ async def negotiate_property(request: NegotiateRequest):
     print(f"   Leverage Score: {prober_result.leverage_score}/10")
     print(f"   Assessment: {prober_result.overall_assessment[:100]}...")
 
-    # Convert findings to response format
-    findings_response = [
-        ProberFindingResponse(
-            category=f.category,
-            summary=f.summary,
-            leverage_score=f.leverage_score,
-            details=f.details,
-            source_url=f.source_url
-        )
-        for f in prober_result.findings
-    ]
+    # Generate AI summary and next actions based on findings
+    print(f"\n📝 Generating negotiation summary with LLM...")
+    summary_prompt = f"""Based on the following property intelligence, create a concise negotiation summary and actionable next steps.
+
+Property: {request.address}
+User: {request.name}
+Additional Context: {request.additional_info or 'None provided'}
+
+Intelligence Findings ({len(prober_result.findings)} items):
+{chr(10).join([f"- {f.category}: {f.summary} (leverage: {f.leverage_score}/10)" for f in prober_result.findings[:5]])}
+
+Overall Assessment: {prober_result.overall_assessment}
+Leverage Score: {prober_result.leverage_score}/10
+
+Generate ONLY valid JSON with this exact structure:
+{{
+  "summary": "A 2-3 sentence summary of the negotiation position and key findings",
+  "next_actions": [
+    "Specific action item 1",
+    "Specific action item 2",
+    "Specific action item 3"
+  ]
+}}
+
+Focus on practical, actionable steps the buyer should take next."""
+
+    summary_result = await llm_summarizer.query_with_json(summary_prompt, temperature=0.5)
+
+    if summary_result.get("success"):
+        summary_data = summary_result.get("data", {})
+        ai_summary = summary_data.get("summary", prober_result.overall_assessment)
+        next_actions = summary_data.get("next_actions", [])
+    else:
+        ai_summary = prober_result.overall_assessment
+        next_actions = [
+            "Review the identified leverage points carefully",
+            "Prepare your negotiation strategy based on findings",
+            "Contact the listing agent to initiate discussions"
+        ]
+
+    print(f"✅ Summary generated with {len(next_actions)} action items")
 
     # TODO: Call Vapi agent with prober_result + user preferences
-    # TODO: Send email confirmation
 
     return NegotiateResponse(
         success=True,
-        address=request.address,
-        findings=findings_response,
-        overall_assessment=prober_result.overall_assessment,
+        message=ai_summary,
         leverage_score=prober_result.leverage_score,
-        message="Property intelligence gathered successfully. Negotiation agent will contact you soon."
+        next_actions=next_actions
     )
 
 

@@ -142,39 +142,34 @@ def create_prober_agent(port: int = 8006):
         ctx.logger.info(f"Probing property: {msg.address}")
 
         # Step 1: Use Tavily to find relevant sources about this property
-        search_queries = [
-            f"{msg.address} property history sale price",
-            f"{msg.address} zillow redfin listing",
-            f"{msg.address} days on market price reduction",
-        ]
+        # Reduced to single query with only 2-3 results to avoid timeout
+        ctx.logger.info(f"Tavily search: {msg.address} property history")
+        tavily_result = await tavily.search(
+            query=f"{msg.address} property history price",
+            search_depth="basic",  # Changed from "advanced" to "basic" for speed
+            max_results=2  # Reduced from 3 to 2
+        )
 
         all_urls = []
-        for query in search_queries:
-            ctx.logger.info(f"Tavily search: {query}")
-            tavily_result = await tavily.search(
-                query=query,
-                search_depth="advanced",
-                max_results=3
-            )
+        if tavily_result.get("success"):
+            results = tavily_result.get("results", [])
+            for result in results:
+                url = result.get("url")
+                # Skip Zillow and Redfin as they're already covered by research agent
+                if url and "zillow.com" not in url.lower() and "redfin.com" not in url.lower():
+                    all_urls.append({
+                        "url": url,
+                        "title": result.get("title", ""),
+                        "content": result.get("content", "")
+                    })
+        else:
+            ctx.logger.warning(f"Tavily search failed: {tavily_result.get('error')}")
 
-            if tavily_result.get("success"):
-                results = tavily_result.get("results", [])
-                for result in results:
-                    url = result.get("url")
-                    if url and url not in [u["url"] for u in all_urls]:
-                        all_urls.append({
-                            "url": url,
-                            "title": result.get("title", ""),
-                            "content": result.get("content", "")
-                        })
-            else:
-                ctx.logger.warning(f"Tavily search failed: {tavily_result.get('error')}")
+        ctx.logger.info(f"Found {len(all_urls)} unique URLs from Tavily (excluding Zillow/Redfin)")
 
-        ctx.logger.info(f"Found {len(all_urls)} unique URLs from Tavily")
-
-        # Step 2: Use BrightData to scrape the top URLs (limit to 5 to avoid rate limits)
+        # Step 2: Use BrightData to scrape the top URLs (limit to 2-3 max)
         scraped_content = []
-        urls_to_scrape = all_urls[:5]
+        urls_to_scrape = all_urls[:3]  # Max 3 sources
 
         for item in urls_to_scrape:
             url = item["url"]

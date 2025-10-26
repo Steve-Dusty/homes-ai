@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Real Estate Agent | Fetch.ai",
+  title: "Homes AI",
   description: "Intelligent property search powered by Fetch.ai uAgents and ASI:One blockchain technology",
 };
 

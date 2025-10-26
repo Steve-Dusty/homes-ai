@@ -130,7 +130,7 @@ export default function ChatInterface({ onPropertiesFound, onTopResultCoordinate
   return (
     <div className="flex h-full flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="border-b border-slate-700/50 bg-black/30 p-4">
-        <h2 className="text-white font-semibold">Fetch.ai Agent</h2>
+        <h2 className="text-white font-semibold">Homes.ai</h2>
         <p className="text-xs text-slate-400 mt-1">
           Powered by ASI:1 + uAgents
         </p>
