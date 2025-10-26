@@ -489,8 +489,8 @@ export default function MapView({ selectedProperty, allProperties, topResultCoor
 
       {/* Floating Sidebar for Top Result */}
       {topResultCoords && topResultDetails && (
-        <div key={`listing-${currentListingIndex}-${topResultDetails?._updateKey || ''}`} className="absolute bottom-4 right-4 w-80 max-h-[70vh] overflow-y-auto">
-          <div className="backdrop-blur-xl bg-slate-900/95 border border-green-500/30 rounded-xl shadow-2xl overflow-hidden">
+        <div key={`listing-${currentListingIndex}-${topResultDetails?._updateKey || ''}`} className="absolute top-[100px] bottom-4 right-4 w-80 overflow-hidden">
+          <div className="h-full overflow-y-auto bg-slate-900/95 backdrop-blur-xl border-2 border-green-500/40 rounded-xl shadow-2xl overflow-hidden">
             {/* Property Image */}
             {topResultCoords.image_url && (
               <div className="relative">
